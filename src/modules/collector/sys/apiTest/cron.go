@@ -1,9 +1,8 @@
-package procs
+package apiTest
 
 import (
-	"time"
-
 	"github.com/didi/nightingale/src/modules/collector/stra"
+	"time"
 )
 
 func Detect() {
@@ -19,8 +18,7 @@ func loopDetect() {
 }
 
 func detect() {
-	ps := stra.GetProcCollects()
-
+	ps := stra.GetApiCollects()
 	DelNoProcCollect(ps)
 	AddNewProcCollect(ps)
 }

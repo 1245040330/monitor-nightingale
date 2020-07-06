@@ -16,6 +16,7 @@ type Collect struct {
 	Procs   map[string]*ProcCollect   `json:"procs"`
 	Logs    map[string]*LogCollect    `json:"logs"`
 	Plugins map[string]*PluginCollect `json:"plugins"`
+	Api     map[string]*ApiCollect `json:"api"`
 }
 
 func NewCollect() *Collect {
@@ -24,6 +25,8 @@ func NewCollect() *Collect {
 		Procs:   make(map[string]*ProcCollect),
 		Logs:    make(map[string]*LogCollect),
 		Plugins: make(map[string]*PluginCollect),
+		Api: make(map[string]*ApiCollect),
+
 	}
 }
 
@@ -52,6 +55,12 @@ func (c *Collect) Update(cc *Collect) {
 	c.Plugins = make(map[string]*PluginCollect)
 	for k, v := range cc.Plugins {
 		c.Plugins[k] = v
+	}
+
+	//更新api采集采集配置
+	c.Api = make(map[string]*ApiCollect)
+	for k, v := range cc.Api {
+		c.Api[k] = v
 	}
 }
 
@@ -94,6 +103,17 @@ func (c *Collect) GetPlugin() map[string]*PluginCollect {
 
 	tmp := make(map[string]*PluginCollect)
 	for k, v := range c.Plugins {
+		tmp[k] = v
+	}
+	return tmp
+}
+
+func (c *Collect) GetApi() map[string]*ApiCollect {
+	c.RLock()
+	defer c.RUnlock()
+
+	tmp := make(map[string]*ApiCollect)
+	for k, v := range c.Api {
 		tmp[k] = v
 	}
 	return tmp
@@ -149,7 +169,20 @@ type PluginCollect struct {
 	LastUpdator string    `xorm:"last_updator" json:"last_updator"`
 	LastUpdated time.Time `xorm:"updated" json:"last_updated"`
 }
-
+type ApiCollect struct {
+	Id          int64     `json:"id"`
+	Nid         int64     `json:"nid"`
+	CollectType string    `json:"collect_type"`
+	Name        string    `json:"name"`
+	Api        string    `json:"api"`
+	Ip        string    `json:"ip"`
+	Step        int       `json:"step"`
+	Comment     string    `json:"comment"`
+	Creator     string    `json:"creator"`
+	Created     time.Time `xorm:"updated" json:"created"`
+	LastUpdator string    `xorm:"last_updator" json:"last_updator"`
+	LastUpdated time.Time `xorm:"updated" json:"last_updated"`
+}
 type LogCollect struct {
 	Id          int64     `json:"id"`
 	Nid         int64     `json:"nid"`
@@ -330,6 +363,11 @@ func GetPluginCollects() ([]*PluginCollect, error) {
 	err := DB["mon"].Find(&collects)
 	return collects, err
 }
+func GetApiCollects() ([]*ApiCollect, error) {
+	collects := []*ApiCollect{}
+	err := DB["mon"].Find(&collects)
+	return collects, err
+}
 
 func (p *PluginCollect) Update() error {
 	session := DB["mon"].NewSession()
@@ -352,6 +390,38 @@ func (p *PluginCollect) Update() error {
 	}
 
 	if err := saveHist(p.Id, "plugin", "update", p.Creator, string(b), session); err != nil {
+		session.Rollback()
+		return err
+	}
+
+	if err = session.Commit(); err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (p *ApiCollect) Update() error {
+	session := DB["mon"].NewSession()
+	defer session.Close()
+
+	err := session.Begin()
+	if err != nil {
+		return err
+	}
+
+	if _, err = session.Id(p.Id).AllCols().Update(p); err != nil {
+		session.Rollback()
+		return err
+	}
+
+	b, err := json.Marshal(p)
+	if err != nil {
+		session.Rollback()
+		return err
+	}
+
+	if err := saveHist(p.Id, "api", "update", p.Creator, string(b), session); err != nil {
 		session.Rollback()
 		return err
 	}
@@ -391,6 +461,17 @@ func CreateCollect(collectType, creator string, collect interface{}) error {
 	return session.Commit()
 }
 
+func GetApiCollect() ([]interface{}, error)  {
+	var res []interface{}
+	collects := []ApiCollect{}
+	err := DB["mon"].Find(&collects)
+	for _, c := range collects {
+		res = append(res, c)
+	}
+	return res, err
+
+}
+
 func GetCollectByNid(collectType string, nids []int64) ([]interface{}, error) {
 	var res []interface{}
 	switch collectType {
@@ -426,6 +507,13 @@ func GetCollectByNid(collectType string, nids []int64) ([]interface{}, error) {
 			res = append(res, c)
 		}
 		return res, err
+	case "api":
+		collects := []ApiCollect{}
+		err := DB["mon"].In("nid", nids).Find(&collects)
+		for _, c := range collects {
+			res = append(res, c)
+		}
+		return res, err
 
 	default:
 		return nil, fmt.Errorf("illegal collectType")
@@ -452,7 +540,10 @@ func GetCollectById(collectType string, cid int64) (interface{}, error) {
 		collect := new(PluginCollect)
 		_, err := DB["mon"].Where("id = ?", cid).Get(collect)
 		return collect, err
-
+	case "api":
+		collect := new(ApiCollect)
+		_, err := DB["mon"].Where("id = ?", cid).Get(collect)
+		return collect, err
 	default:
 		return nil, fmt.Errorf("illegal collectType")
 	}

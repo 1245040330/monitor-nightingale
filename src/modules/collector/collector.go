@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/didi/nightingale/src/modules/collector/sys/apiTest"
 	"log"
 	"os"
 	"os/signal"
@@ -91,6 +92,7 @@ func main() {
 	//初始化缓存，用作保存COUNTER类型数据
 	cache.Init()
 
+	apiTest.Detect()
 	//日志采集
 	worker.Init(config.Config.Worker)
 	go worker.UpdateConfigsLoop()
