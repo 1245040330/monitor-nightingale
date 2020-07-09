@@ -208,6 +208,33 @@ func syncCollects() {
 		}
 	}
 
+	apiCongigs,err := model.GetApiCollects()
+	if(err!=nil){
+		logger.Warningf("get api collects err:%v", err)
+	}
+	for _,p := range apiCongigs{
+		leafNids,err :=GetLeafNids(p.Nid,[]int64{})
+		if err!=nil{
+			logger.Warningf("get LeafNids err:%v %v", err, p)
+			continue
+		}
+		Endpoints,err :=model.EndpointUnderLeafs(leafNids)
+		if err != nil{
+			logger.Warningf("get endpoints err:%v %v", err, p)
+			continue
+		}
+		for _,endpoint :=range Endpoints{
+			name :=endpoint.Ident
+			c,exists:=collectMap[name]
+			if !exists{
+				c=model.NewCollect()
+			}
+			key :=fmt.Sprintf("%s-%d", p.Name, p.Nid)
+			c.Api[key]=p
+			collectMap[name]=c
+		}
+	}
+
 	CollectCache.SetAll(collectMap)
 }
 
